@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 
-const API = "http://localhost:8000";
+const API = "https://scamshield-backend-8zi6.onrender.com";
 
 const T = {
   bg:        "#03050f",
