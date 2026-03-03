@@ -6,9 +6,9 @@ python-multipart
 requests
 beautifulsoup4
 python-dotenv
+pytesseract
 Pillow
 pdfplumber
 numpy
 pandas
 groq
-easyocr
