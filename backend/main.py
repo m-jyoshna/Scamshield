@@ -31,16 +31,13 @@ load_dotenv()
 
 # ─── OCR Imports ─────────────────────────────────────────────────────────────
 try:
-    import pytesseract
+    import easyocr
     from PIL import Image, ImageFilter, ImageEnhance
     OCR_AVAILABLE = True
-
-    # Windows: auto-detect Tesseract path
-    if os.name == 'nt':
-        pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+    ocr_reader = None  # lazy load on first use
 except ImportError:
     OCR_AVAILABLE = False
-    print("⚠️  pytesseract not installed. Run: pip install pytesseract Pillow")
+    print("⚠️  easyocr not installed. Run: pip install easyocr")
 
 try:
     import pdfplumber
@@ -98,16 +95,31 @@ def preprocess_image(image):
 
 # ─── OCR ─────────────────────────────────────────────────────────────────────
 def ocr_image(image_bytes: bytes) -> str:
+    global ocr_reader
     if not OCR_AVAILABLE:
-        raise HTTPException(500, "OCR not available. Install pytesseract + Tesseract engine.")
+        raise HTTPException(500, "OCR not available. Install easyocr.")
     try:
-        image = preprocess_image(Image.open(io.BytesIO(image_bytes)))
-        best = ""
-        for cfg in [r'--oem 3 --psm 6', r'--oem 3 --psm 4', r'--oem 3 --psm 3']:
-            t = pytesseract.image_to_string(image, config=cfg, lang='eng')
-            if len(t.strip()) > len(best.strip()):
-                best = t
-        return best.strip()
+        # Lazy load EasyOCR reader on first use
+        if ocr_reader is None:
+            print("Loading EasyOCR model (first time only)...")
+            ocr_reader = easyocr.Reader(['en'], gpu=False)
+            print("EasyOCR ready!")
+
+        image = Image.open(io.BytesIO(image_bytes))
+        if image.mode not in ('RGB', 'L'):
+            image = image.convert('RGB')
+
+        # Upscale for better accuracy
+        w, h = image.size
+        if w < 1200:
+            scale = 1200 / w
+            image = image.resize((int(w*scale), int(h*scale)), Image.LANCZOS)
+
+        import numpy as np
+        img_array = np.array(image)
+        results = ocr_reader.readtext(img_array, detail=0, paragraph=True)
+        text = "\n".join(results)
+        return text.strip()
     except Exception as e:
         raise HTTPException(500, f"OCR failed: {e}")
 
